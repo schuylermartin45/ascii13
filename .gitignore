@@ -1,0 +1,53 @@
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+
+# non-standard exceptions
+*.bak
+*CMakeFiles/*
+*CMakeCache.txt
+*.make
+*.cmake
+Makefile
+
+# video/image files
+*.png
+*.tiff
+*.jpeg
+*.swp
+*.MOV
+*.mkv
+*.mp4
+
+# executable
+ascii13
