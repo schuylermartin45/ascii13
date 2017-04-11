@@ -31,12 +31,12 @@ using namespace std;
     // resizes frames to draw on smaller displays
     #define DEBUG_SHRINK_FRAMES     true
     // draws intermediate matrices, for all frames
-    #define DEBUG_ALL_FRAMES        true
+    //#define DEBUG_ALL_FRAMES        true
     // disables user input keypress wait; runs through debugging automatically
     #define DEBUG_ANIMATE_FRAMES    true
 #endif
 #ifdef DEBUG_ANIMATE_FRAMES
-    #define DEBUG_KEY_WAIT  40
+    #define DEBUG_KEY_WAIT  1
 #else
     #define DEBUG_KEY_WAIT  0
 #endif
@@ -50,6 +50,16 @@ using namespace std;
 #define EDGE_THRESH_RATIO   3
 #define EDGE_THRESH_LO      30
 #define EDGE_THRESH_HI      (EDGE_THRESH_RATIO * EDGE_THRESH_LO)
+
+// text resolution
+#define TEXT_WIDTH  80
+#define TEXT_HEIGHT 44
+
+// character encoding macros
+// character to use in drawings
+#define CHAR_CHAR   "*"
+// threshold to use when determining if a character should be drawn
+#define CHAR_THRESH 13
 
 /*
 ** Fetches the current millisecond timestamp
@@ -170,7 +180,30 @@ int main(int argc, char** argv)
         int   in_codec   = (int)vid_stream.get(CV_CAP_PROP_FOURCC);
         cout << fd_in[id] << " stats:" << endl;
         cout << "  + Frames: " << frame_n << endl;
+        cout << "  + FPS:    " << fps << endl;
+        cout << "  + Codec:  " << in_codec << endl;
         cout << "  + Size:   " << frame_w << "x" << frame_h << endl;
+
+        // pre-compute some data about the output video
+        string fd_out = output_fd(fd_in[id]);
+        int out_codec = CV_FOURCC('M','P','4','V');
+        int h_baseline = 0;
+        Size char_sz = getTextSize(CHAR_CHAR,
+            FONT_HERSHEY_PLAIN, 1, 1, &h_baseline
+        );
+        // view window for sampling pixels when determing 
+        uint32_t window_w = frame_w / TEXT_WIDTH;
+        uint32_t window_h = frame_h / TEXT_HEIGHT;
+        uint32_t char_fr_w = char_sz.width * TEXT_WIDTH;
+        uint32_t char_fr_h = char_sz.height * TEXT_HEIGHT;
+        cout << fd_out << " stats:" << endl;
+        cout << "  + Codec:  " << out_codec << endl;
+        cout << "  + Text Dimensions:   " << TEXT_WIDTH << "x" 
+            << TEXT_HEIGHT << endl;
+        cout << "  + Pixels per char:   " << char_sz.width << "x" 
+            << char_sz.height << endl;
+        cout << "  + Pixel Dimensions:  " << char_fr_w << "x" 
+            << char_fr_h << endl;
 
         // calculate the time it takes to process this image
         uint64_t vid_proc_start_time = get_ms_timestamp();
@@ -178,11 +211,9 @@ int main(int argc, char** argv)
         // buffering all the frames in a vector is impractical so we write
         // to the video stream as soon as we can
         VideoWriter writer;
-        string fd_out = output_fd(fd_in[id]);
-        int out_codec = CV_FOURCC('M','P','4','V');
         // last variable indicates if this is a color or black and white video
         // This makes a huge difference when using 8-bit color
-        writer.open(fd_out, out_codec, fps, Size(frame_w, frame_h), false);
+        writer.open(fd_out, out_codec, fps, Size(char_fr_w, char_fr_h), false);
         if (!writer.isOpened())
         {
             cerr << "File " << fd_out << "could not be opened for writing."
@@ -210,8 +241,41 @@ int main(int argc, char** argv)
             // edge detector
             Canny(fr_gry, edge_mask, EDGE_THRESH_LO, EDGE_THRESH_HI, GAUS_SIZE);
 
-            // convert edge mask to an image
-            fr_out = edge_mask;
+            // convert the edge information into characters
+            fr_out = Mat(char_fr_h, char_fr_w, CV_8U);
+            fr_out = Scalar(0);
+            // move a sampling window across the frame and determine
+            // whether
+            for(uint32_t row=0; row<TEXT_HEIGHT; ++row)
+            {
+                for(uint32_t col=0; col<TEXT_WIDTH; ++col)
+                {
+                    // pull out the sampling region
+                    uint32_t col_px = col * window_w;
+                    uint32_t row_px = row * window_h;
+                    Mat sub = edge_mask(
+                        Rect(col_px, row_px, window_w, window_h)
+                    );
+                    // sum the values in the region
+                    int32_t sub_sum = sum(sub)[0];
+                    if (sub_sum > CHAR_THRESH)
+                    {
+                        // normalized color for the sampling region
+                        int32_t sub_clr = sub_sum % 256;
+                        // draw the character on the screen
+                        putText(fr_out, CHAR_CHAR,
+                            Point2f(col * char_sz.width, 
+                                (row * char_sz.height) + char_sz.height),
+                            FONT_HERSHEY_PLAIN, 1, Scalar(sub_clr)
+                        );
+                    }
+                }
+            }
+
+            #ifdef DEBUG_ALL_FRAMES
+                imshow("Test", fr_out);
+                waitKey(DEBUG_KEY_WAIT);
+            #endif
 
             // copy the frame data to the file stream
             writer.write(fr_out);
