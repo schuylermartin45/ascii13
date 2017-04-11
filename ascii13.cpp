@@ -43,10 +43,13 @@ using namespace std;
 
 // output file naming
 #define OUT_SUFFIX  "_out"
-#define OUT_EXT     ".mp4"
 
 // blur filter size
-#define GAUS_SIZE           7
+#define GAUS_SIZE           3
+// edge threshold values
+#define EDGE_THRESH_RATIO   3
+#define EDGE_THRESH_LO      30
+#define EDGE_THRESH_HI      (EDGE_THRESH_RATIO * EDGE_THRESH_LO)
 
 /*
 ** Fetches the current millisecond timestamp
@@ -87,7 +90,7 @@ string get_time_str(uint64_t ms)
 string output_fd(string fd)
 {
     int ext_idx = fd.find_last_of(".");
-    return fd.substr(0, ext_idx) + OUT_SUFFIX + fd.substr(ext_idx);
+    return fd.substr(0, ext_idx) + OUT_SUFFIX + ".mp4";
 }
 
 /*
@@ -99,6 +102,9 @@ string output_fd(string fd)
 void draw_progress_bar(uint32_t fr, uint32_t total_fr)
 {
     uint32_t bar_width = 50;
+    // reduce the amount of time spent on drawing
+    if ((fr % 10) != 0)
+        return;
     cout << "[";
     // integer progress calculation
     uint32_t pos = fr / (total_fr / bar_width);
@@ -161,7 +167,7 @@ int main(int argc, char** argv)
         uint32_t frame_w = (uint32_t)vid_stream.get(CAP_PROP_FRAME_WIDTH);
         uint32_t frame_h = (uint32_t)vid_stream.get(CAP_PROP_FRAME_HEIGHT);
         double   fps     = (double)vid_stream.get(CAP_PROP_FPS);
-        int      codec   = (int)vid_stream.get(CV_CAP_PROP_FOURCC);
+        int   in_codec   = (int)vid_stream.get(CV_CAP_PROP_FOURCC);
         cout << fd_in[id] << " stats:" << endl;
         cout << "  + Frames: " << frame_n << endl;
         cout << "  + Size:   " << frame_w << "x" << frame_h << endl;
@@ -173,9 +179,10 @@ int main(int argc, char** argv)
         // to the video stream as soon as we can
         VideoWriter writer;
         string fd_out = output_fd(fd_in[id]);
+        int out_codec = CV_FOURCC('M','P','4','V');
         // last variable indicates if this is a color or black and white video
         // This makes a huge difference when using 8-bit color
-        writer.open(fd_out, codec, fps, Size(frame_w, frame_h), false);
+        writer.open(fd_out, out_codec, fps, Size(frame_w, frame_h), false);
         if (!writer.isOpened())
         {
             cerr << "File " << fd_out << "could not be opened for writing."
@@ -183,8 +190,9 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
+        cout << "Rendering..." << endl;
         // iterate over the initial video data
-        Mat fr_buff;
+        Mat fr_buff, prev_buff;
         uint32_t fr_cntr = 0;
         while(fr_cntr < frame_n)
         {
@@ -193,14 +201,14 @@ int main(int argc, char** argv)
             if (fr_buff.empty())
                 continue;
 
-            /** Process the Frame **/
+            // ========== BEGIN Process the Frame ==========
             Mat fr_gry, edge_mask, fr_out;
             // Grayscale
             cvtColor(fr_buff, fr_gry, CV_BGR2GRAY);
-
             // Gaussian blur
             blur(fr_gry, fr_gry, Size(GAUS_SIZE, GAUS_SIZE));
-            Canny(fr_gry, edge_mask, 30, 90, GAUS_SIZE);
+            // edge detector
+            Canny(fr_gry, edge_mask, EDGE_THRESH_LO, EDGE_THRESH_HI, GAUS_SIZE);
 
             // convert edge mask to an image
             fr_out = edge_mask;
@@ -209,6 +217,17 @@ int main(int argc, char** argv)
             writer.write(fr_out);
             draw_progress_bar(fr_cntr, frame_n);
             ++fr_cntr;
+
+            // ========== END   Process the Frame ==========
+
+            // limit frames for testing purposes
+            #ifdef DEBUG
+                if (fr_cntr >= 700)
+                {
+                    writer.release();
+                    break;
+                }
+            #endif
         }
 
         // indicate total processing time of the video
