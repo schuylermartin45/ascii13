@@ -173,7 +173,9 @@ int main(int argc, char** argv)
         // to the video stream as soon as we can
         VideoWriter writer;
         string fd_out = output_fd(fd_in[id]);
-        writer.open(fd_out, codec, fps, Size(frame_w, frame_h), true);
+        // last variable indicates if this is a color or black and white video
+        // This makes a huge difference when using 8-bit color
+        writer.open(fd_out, codec, fps, Size(frame_w, frame_h), false);
         if (!writer.isOpened())
         {
             cerr << "File " << fd_out << "could not be opened for writing."
@@ -192,14 +194,19 @@ int main(int argc, char** argv)
                 continue;
 
             /** Process the Frame **/
-            //Mat fr_gry;
-            //cvtColor(fr_buff, fr_gry, COLOR_BGR2GRAY);
+            Mat fr_gry, edge_mask, fr_out;
+            // Grayscale
+            cvtColor(fr_buff, fr_gry, CV_BGR2GRAY);
+
             // Gaussian blur
-            blur(fr_buff, fr_buff, Size(GAUS_SIZE, GAUS_SIZE));
-            //Canny(fr_gry, fr_buff, 30, 300, GAUS_SIZE);
+            blur(fr_gry, fr_gry, Size(GAUS_SIZE, GAUS_SIZE));
+            Canny(fr_gry, edge_mask, 30, 90, GAUS_SIZE);
+
+            // convert edge mask to an image
+            fr_out = edge_mask;
 
             // copy the frame data to the file stream
-            writer.write(fr_buff);
+            writer.write(fr_out);
             draw_progress_bar(fr_cntr, frame_n);
             ++fr_cntr;
         }
