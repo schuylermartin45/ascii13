@@ -41,9 +41,6 @@
 Makefile
 
 # video/image files
-*.png
-*.tiff
-*.jpeg
 *.swp
 *.MOV
 *.mkv
