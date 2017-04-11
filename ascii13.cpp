@@ -3,7 +3,9 @@
 **
 ** Author:  Schuyler Martin <sam8050@rit.edu>
 **
-** Description: Video to ASCII video in OpenCV
+** Description: Video to ASCII video using OpenCV
+**
+** Usage:       ./ascii13 files
 */
 
 #include <stdio.h>
@@ -24,7 +26,7 @@ using namespace std;
 #define USAGE "Usage: ./ascii13 files"
 
 // master debug macro; enables all forms of debugging
-#define DEBUG true
+//#define DEBUG true
 
 // additional debugging flags that control more specific debug features
 #ifdef DEBUG
@@ -59,7 +61,10 @@ using namespace std;
 // character to use in drawings
 #define CHAR_CHAR   "*"
 // threshold to use when determining if a character should be drawn
-#define CHAR_THRESH 13
+#define CHAR_THRESH 25
+
+// character width of the progress bar
+#define PROGRESS_BAR_WIDTH  40
 
 /*
 ** Fetches the current millisecond timestamp
@@ -87,7 +92,12 @@ uint64_t get_ms_timestamp()
 string get_time_str(uint64_t ms)
 {
     stringstream buff;
-    buff << ms / 1000 << "." << ms % 1000 << "s";
+    uint64_t sec = (ms / 1000) % 60 ;
+    uint64_t min = (ms / (1000*60)) % 60;
+    uint64_t hrs   = (ms / (1000*60*60)) % 24;
+    buff << setfill('0') << setw(2) << hrs << ":" 
+        << setfill('0') << setw(2) << min << ":" 
+        << setfill('0') << setw(2) << sec << "." << ms % 1000 << "s";
     return buff.str();
 }
 
@@ -111,15 +121,14 @@ string output_fd(string fd)
 */
 void draw_progress_bar(uint32_t fr, uint32_t total_fr)
 {
-    uint32_t bar_width = 50;
     // reduce the amount of time spent on drawing
     if ((fr % 10) != 0)
         return;
     cout << "[";
     // integer progress calculation
-    uint32_t pos = fr / (total_fr / bar_width);
+    uint32_t pos = fr / (total_fr / PROGRESS_BAR_WIDTH);
     // draw the load bar, depending on the position
-    for(uint32_t i=0; i<bar_width; ++i)
+    for(uint32_t i=0; i<PROGRESS_BAR_WIDTH; ++i)
     {
         if (i < pos)
             cout << "=";
@@ -213,7 +222,7 @@ int main(int argc, char** argv)
         VideoWriter writer;
         // last variable indicates if this is a color or black and white video
         // This makes a huge difference when using 8-bit color
-        writer.open(fd_out, out_codec, fps, Size(char_fr_w, char_fr_h), false);
+        writer.open(fd_out, out_codec, fps, Size(char_fr_w, char_fr_h), true);
         if (!writer.isOpened())
         {
             cerr << "File " << fd_out << "could not be opened for writing."
@@ -230,7 +239,11 @@ int main(int argc, char** argv)
             vid_stream >> fr_buff;
             // skip the strange empty frames that can occur
             if (fr_buff.empty())
+            {
+                cerr << "WARNING: Frame " << fr_cntr << " skipped" << endl;
+                ++fr_cntr;
                 continue;
+            }
 
             // ========== BEGIN Process the Frame ==========
             Mat fr_gry, edge_mask, fr_out;
@@ -242,7 +255,7 @@ int main(int argc, char** argv)
             Canny(fr_gry, edge_mask, EDGE_THRESH_LO, EDGE_THRESH_HI, GAUS_SIZE);
 
             // convert the edge information into characters
-            fr_out = Mat(char_fr_h, char_fr_w, CV_8U);
+            fr_out = Mat(char_fr_h, char_fr_w, CV_8UC3);
             fr_out = Scalar(0);
             // move a sampling window across the frame and determine
             // whether
@@ -253,20 +266,21 @@ int main(int argc, char** argv)
                     // pull out the sampling region
                     uint32_t col_px = col * window_w;
                     uint32_t row_px = row * window_h;
-                    Mat sub = edge_mask(
-                        Rect(col_px, row_px, window_w, window_h)
-                    );
+                    // view window, region of interest
+                    Rect roi = Rect(col_px, row_px, window_w, window_h);
+                    Mat sub = edge_mask(roi);
                     // sum the values in the region
-                    int32_t sub_sum = sum(sub)[0];
+                    int32_t sub_sum = mean(sub)[0];
                     if (sub_sum > CHAR_THRESH)
                     {
-                        // normalized color for the sampling region
-                        int32_t sub_clr = sub_sum % 256;
+                        // get the average color of the pixels that form the
+                        // edge information
+                        Scalar sub_clr = mean(fr_buff(roi), sub);
                         // draw the character on the screen
                         putText(fr_out, CHAR_CHAR,
                             Point2f(col * char_sz.width, 
                                 (row * char_sz.height) + char_sz.height),
-                            FONT_HERSHEY_PLAIN, 1, Scalar(sub_clr)
+                            FONT_HERSHEY_PLAIN, 1, sub_clr
                         );
                     }
                 }
@@ -294,7 +308,7 @@ int main(int argc, char** argv)
         writer.release();
 
         // indicate total processing time of the video
-        cout << "\n" << "  + Video processing time: " << 
+        cout << "\nVideo processing time: " << 
             get_time_str(get_ms_timestamp() - vid_proc_start_time) << endl;
     }
     return EXIT_SUCCESS;

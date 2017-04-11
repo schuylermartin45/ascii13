@@ -15,8 +15,9 @@ fi
 
 # iterate over all the videos provided on the command line
 for fd in "$@"; do
+    echo "Adding audio to ${fd%.*}_out.mp4 with FFMPEG..."
     # splice in the audio from the original file into the second video
-    ffmpeg -i "${fd}" -i "${fd%.*}""_out.mp4" -y -c \
+    ffmpeg -loglevel panic -i "${fd}" -i "${fd%.*}""_out.mp4" -y -c \
         copy -c:a mp3 -map 0:a:0 -map 1:v:0 -shortest "tmp_out.mp4"
     if [ "$?" -ne 0 ]; then
         >&2 echo "ERROR: ffmpeg failed"
