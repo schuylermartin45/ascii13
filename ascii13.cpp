@@ -21,10 +21,10 @@ using namespace std;
 
 // Macros
 // Usage message
-#define USAGE "Usage: ./ascii13 [files]"
+#define USAGE "Usage: ./ascii13 files"
 
 // master debug macro; enables all forms of debugging
-//#define DEBUG true
+#define DEBUG true
 
 // additional debugging flags that control more specific debug features
 #ifdef DEBUG
@@ -223,12 +223,11 @@ int main(int argc, char** argv)
             // limit frames for testing purposes
             #ifdef DEBUG
                 if (fr_cntr >= 700)
-                {
-                    writer.release();
                     break;
-                }
             #endif
         }
+        // release the writer
+        writer.release();
 
         // indicate total processing time of the video
         cout << "\n" << "  + Video processing time: " << 

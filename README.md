@@ -17,6 +17,7 @@ These programs are necessary to build and install
 - g++
 - make
 - OpenCV 3
+- ffmpeg
 
 ### Compiling from Source
 To compile the project:
@@ -25,6 +26,11 @@ cmake .
 make
 ```
 ### Running the project
+To just render the video file:
 ```shell
 ./ascii13 files
+```
+To just render the video and preserve the audio:
+```shell
+./ascii13.sh files
 ```
