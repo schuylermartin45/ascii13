@@ -91,6 +91,32 @@ string output_fd(string fd)
 }
 
 /*
+** Text-based progress bar
+**
+** @param fr Current frame number
+** @param total_fr Total frame count
+*/
+void draw_progress_bar(uint32_t fr, uint32_t total_fr)
+{
+    uint32_t bar_width = 50;
+    cout << "[";
+    // integer progress calculation
+    uint32_t pos = fr / (total_fr / bar_width);
+    // draw the load bar, depending on the position
+    for(uint32_t i=0; i<bar_width; ++i)
+    {
+        if (i < pos)
+            cout << "=";
+        else if (i == pos)
+            cout << ">";
+        else
+            cout << " ";
+    }
+    cout << "] " << fr << "/" << total_fr << " \r";
+    cout.flush();
+}
+
+/*
 ** Main execution point of the program
 **
 ** @param argc Argument count
@@ -156,24 +182,30 @@ int main(int argc, char** argv)
         }
 
         // iterate over the initial video data
-        Mat frame_buff;
+        Mat fr_buff;
         uint32_t fr_cntr = 0;
         while(fr_cntr < frame_n)
         {
-            vid_stream >> frame_buff;
+            vid_stream >> fr_buff;
             // skip the strange empty frames that can occur
-            if (frame_buff.empty())
+            if (fr_buff.empty())
                 continue;
 
-            // TODO process the frame
+            /** Process the Frame **/
+            //Mat fr_gry;
+            //cvtColor(fr_buff, fr_gry, COLOR_BGR2GRAY);
+            // Gaussian blur
+            blur(fr_buff, fr_buff, Size(GAUS_SIZE, GAUS_SIZE));
+            //Canny(fr_gry, fr_buff, 30, 300, GAUS_SIZE);
 
             // copy the frame data to the file stream
-            writer.write(frame_buff);
+            writer.write(fr_buff);
+            draw_progress_bar(fr_cntr, frame_n);
             ++fr_cntr;
         }
 
         // indicate total processing time of the video
-        cout << "  + Video processing time: " << 
+        cout << "\n" << "  + Video processing time: " << 
             get_time_str(get_ms_timestamp() - vid_proc_start_time) << endl;
     }
     return EXIT_SUCCESS;
